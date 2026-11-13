@@ -1,0 +1,99 @@
+@page "/ncr/{Id:int}"
+@inject VeriServisi Veri
+@inject OturumServisi Oturum
+@inject CihazServisi Cihaz
+@inject IJSRuntime JS
+
+@if (ncr == null)
+{
+    <div class="bos"><div>🔎</div>NCR bulunamadı.</div>
+}
+else
+{
+    <div class="satir arasi">
+        <div class="sayfa-baslik"><h1 class="mono">@ncr.NcrNo</h1><p>@emir?.LotNo · @parca?.SeriNo</p></div>
+        <span class="rozet @(ncr.Durum == Durum.Acik ? "kirmizi" : "sari")">@ncr.Durum</span>
+    </div>
+
+    <div class="kart">
+        <div class="kart-baslik"><h2>⚠️ Tanım</h2></div>
+        <p style="margin:0 0 8px">@ncr.Tanim</p>
+        <small class="soluk">Açan: @ncr.Acan · @ncr.Zaman.ToString("dd.MM.yyyy HH:mm")</small>
+    </div>
+
+    <div class="kart">
+        <div class="kart-baslik"><h2>📸 Hata fotoğrafı</h2><button class="buton kucuk" @onclick="FotoEkle">@(foto == null ? "Çek" : "Yenile")</button></div>
+        @if (foto != null)
+        {
+            <img class="foto" src="@foto" alt="Hata fotoğrafı" />
+        }
+        else
+        {
+            <div class="bos" style="padding:14px"><div>📷</div>Henüz fotoğraf yok. Hatalı bölgeyi çekip kanıt olarak ekleyin.</div>
+        }
+    </div>
+
+    @if (ncr.Durum == Durum.Acik)
+    {
+        <div class="kart">
+            <div class="kart-baslik"><h2>🛡️ Karar</h2><small class="soluk">Kalite / Yönetici</small></div>
+            @if (Oturum.RoldeMi(Rol.Kalite, Rol.Yonetici, Rol.Admin))
+            {
+                <div class="form">
+                    <button class="buton kirmizi" @onclick="@(() => Karar("Hurda"))">🗑️ Hurda</button>
+                    <button class="buton" @onclick="@(() => Karar("Yeniden işleme"))">🔁 Yeniden işleme</button>
+                    <button class="buton bakir" @onclick="@(() => Karar("Şartlı kabul"))">✔️ Şartlı kabul</button>
+                </div>
+            }
+            else
+            {
+                <div class="mesaj">Karar için kalite ekibi bilgilendirildi. Lot karar verilene kadar bloke kalır.</div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="kart"><div class="kart-baslik"><h2>✅ Karar</h2><span class="rozet sari">@ncr.Karar</span></div><small class="soluk">Kapanış ve elektronik imza masaüstü sürümde yapılır.</small></div>
+    }
+    @if (mesaj != null) { <div class="mesaj @(hata ? "hata" : "basari")">@mesaj</div> }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private Ncr? ncr;
+    private Parca? parca;
+    private Emir? emir;
+    private string? foto, mesaj;
+    private bool hata;
+
+    protected override async Task OnParametersSetAsync() => await Yukle();
+
+    private async Task Yukle()
+    {
+        ncr = await Veri.NcrAsync(Id);
+        if (ncr == null) return;
+        parca = await Veri.ParcaAsync(ncr.ParcaId);
+        emir = await Veri.EmirAsync(ncr.EmirId);
+        foto = await Cihaz.FotoVerisi(ncr.FotoYolu);
+    }
+
+    private async Task FotoEkle()
+    {
+        if (ncr == null) return;
+        var yol = await Cihaz.FotoCek();
+        if (yol == null) return;
+        await Veri.NcrFotoAsync(ncr, yol);
+        foto = await Cihaz.FotoVerisi(yol);
+        Cihaz.Basari();
+    }
+
+    private async Task Karar(string karar)
+    {
+        var sonuc = await Veri.NcrKararAsync(Id, karar, Oturum.Kullanici!);
+        hata = sonuc != null;
+        mesaj = sonuc ?? $"Karar kaydedildi: {karar}. Lotta açık NCR kalmadıysa bloke kalktı.";
+        await JS.InvokeVoidAsync("efekt.cal", hata ? "hata" : "basari");
+        if (!hata) await JS.InvokeVoidAsync("efekt.konfeti");
+        await Yukle();
+    }
+}

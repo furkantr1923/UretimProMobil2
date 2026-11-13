@@ -1,0 +1,82 @@
+@page "/sayim"
+@inject VeriServisi Veri
+@inject OturumServisi Oturum
+@inject CihazServisi Cihaz
+@inject IJSRuntime JS
+
+<div class="sayfa-baslik"><h1>Stok sayımı</h1><p>Lot etiketini okut veya seç, saydığın miktarı gir. Fark anında hesaplanır.</p></div>
+
+<div class="kart">
+    <div class="form">
+        <button class="buton bakir tam" @onclick="Kamera">📷 Lot etiketini okut</button>
+        <label class="alan">Hammadde lotu
+            <select class="girdi" @bind="lotNo">
+                <option value="">Seçin</option>
+                @foreach (var l in lotlar)
+                {
+                    <option value="@l.LotNo">@l.LotNo · @l.Malzeme</option>
+                }
+            </select>
+        </label>
+        @if (Secili != null)
+        {
+            <div class="satir arasi"><span class="soluk">Sistemdeki miktar</span><b class="mono">@Secili.Kalan.ToString("N1") kg</b></div>
+            <label class="alan">Sayılan miktar (kg) <input class="girdi mono" inputmode="decimal" @bind="sayilan" @bind:event="oninput" /></label>
+            @if (VeriServisi.SayiCoz(sayilan, out var s))
+            {
+                var fark = Math.Round(s - Secili.Kalan, 1);
+                <div class="mesaj @(Math.Abs(fark) < 0.5 ? "basari" : "hata")">Fark: <b class="mono">@(fark > 0 ? "+" : "")@fark.ToString("N1") kg</b> @(Math.Abs(fark) < 0.5 ? "· Stok tutarlı ✓" : "· Depo sorumlusuna bildirilecek")</div>
+            }
+            <button class="buton yesil tam" @onclick="Kaydet">✓ Sayımı kaydet</button>
+        }
+        @if (mesaj != null) { <div class="mesaj">@mesaj</div> }
+    </div>
+</div>
+
+<div class="kart">
+    <div class="kart-baslik"><h2>📋 Son sayımlar</h2></div>
+    @if (sayimlar.Count == 0) { <div class="bos" style="padding:12px">Henüz sayım yok.</div> }
+    <div class="liste">
+        @foreach (var x in sayimlar)
+        {
+            <div class="liste-oge">
+                <span class="ikon">📦</span>
+                <span class="metin"><b class="mono">@x.LotNo</b><small>@x.Malzeme · @x.Kisi · @x.Zaman.ToString("dd.MM HH:mm")</small></span>
+                <span class="rozet @(Math.Abs(x.Fark) < 0.5 ? "yesil" : "kirmizi")">@(x.Fark > 0 ? "+" : "")@x.Fark.ToString("N1")</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<HammaddeLotu> lotlar = new();
+    private List<UretimProMobil.Models.Sayim> sayimlar = new();
+    private string lotNo = "";
+    private string? sayilan, mesaj;
+    private HammaddeLotu? Secili => lotlar.FirstOrDefault(l => l.LotNo == lotNo);
+
+    protected override async Task OnInitializedAsync()
+    {
+        lotlar = await Veri.LotlarAsync();
+        sayimlar = await Veri.SayimlarAsync();
+    }
+
+    private async Task Kamera()
+    {
+        var deger = (await Cihaz.QrOkut())?.Trim().ToUpperInvariant();
+        if (deger == null) return;
+        if (lotlar.Any(l => l.LotNo == deger)) { lotNo = deger; Cihaz.Basari(); await JS.InvokeVoidAsync("efekt.cal", "bip"); }
+        else { mesaj = $"\"{deger}\" bir hammadde lotu değil."; await JS.InvokeVoidAsync("efekt.cal", "hata"); }
+    }
+
+    private async Task Kaydet()
+    {
+        if (Secili == null || !VeriServisi.SayiCoz(sayilan, out var s) || s < 0) { mesaj = "Geçerli bir miktar girin."; return; }
+        var kayit = await Veri.SayimKaydetAsync(Secili, s, Oturum.Kullanici!);
+        mesaj = $"{kayit.LotNo} sayımı kaydedildi, kuyruğa eklendi.";
+        sayilan = null;
+        sayimlar = await Veri.SayimlarAsync();
+        Cihaz.Basari();
+        await JS.InvokeVoidAsync("efekt.cal", "basari");
+    }
+}

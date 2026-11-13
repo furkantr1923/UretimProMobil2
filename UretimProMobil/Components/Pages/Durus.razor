@@ -1,0 +1,93 @@
+@page "/durus"
+@inject VeriServisi Veri
+@inject OturumServisi Oturum
+@inject CihazServisi Cihaz
+@inject IJSRuntime JS
+
+<div class="sayfa-baslik"><h1>Duruş ve arıza bildirimi</h1><p>Duran her dakika OEE'yi düşürür. Duruşu başlat, iş bitince bitir.</p></div>
+
+<div class="kart">
+    <div class="form">
+        <label class="alan">Makine
+            <select class="girdi" @bind="makineId">
+                <option value="0">Seçin</option>
+                @foreach (var m in makineler)
+                {
+                    <option value="@m.Id">@m.Kod · @m.Ad (@m.Durum)</option>
+                }
+            </select>
+        </label>
+        <label class="alan">Neden</label>
+        <div class="cipler">
+            @foreach (var n in DurusNedeni.Tumu)
+            {
+                <button class="cip" style="@(n == neden ? "background:var(--bakir);color:#fff;border-color:var(--bakir)" : "")" @onclick="() => neden = n">@n</button>
+            }
+        </div>
+        <label class="alan">Açıklama <input class="girdi" @bind="aciklama" placeholder="Örn. hidrolik basınç düştü" /></label>
+        @if (mesaj != null) { <div class="mesaj @(hata ? "hata" : "basari")">@mesaj</div> }
+        <button class="buton @(neden == "Arıza" ? "kirmizi" : "bakir") tam" @onclick="Baslat">⏸️ Duruşu başlat</button>
+    </div>
+</div>
+
+<div class="kart">
+    <div class="kart-baslik"><h2>🕒 Son duruşlar</h2></div>
+    <div class="liste">
+        @foreach (var d in duruslar)
+        {
+            var m = makineler.FirstOrDefault(x => x.Id == d.MakineId);
+            <div class="liste-oge">
+                <span class="ikon">@(d.Neden == "Arıza" ? "🔧" : "⏸️")</span>
+                <span class="metin"><b>@m?.Kod · @d.Neden</b><small>@d.Aciklama</small><small>@d.Baslangic.ToString("dd.MM HH:mm") · @Sure(d) · @d.Bildiren</small></span>
+                @if (d.Bitis == null)
+                {
+                    <button class="buton yesil kucuk" @onclick="() => Bitir(d.Id)">Bitir</button>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<Makine> makineler = new();
+    private List<UretimProMobil.Models.Durus> duruslar = new();
+    private int makineId;
+    private string neden = "Arıza";
+    private string? aciklama, mesaj;
+    private bool hata;
+
+    protected override async Task OnInitializedAsync() => await Yukle();
+
+    private async Task Yukle()
+    {
+        makineler = await Veri.MakinelerAsync();
+        duruslar = await Veri.DuruslarAsync();
+    }
+
+    private async Task Baslat()
+    {
+        var sonuc = makineId == 0 ? "Makine seçin." : await Veri.DurusBaslatAsync(makineId, neden, string.IsNullOrWhiteSpace(aciklama) ? null : aciklama.Trim(), Oturum.Kullanici!);
+        hata = sonuc != null;
+        mesaj = sonuc ?? "Duruş kaydedildi, bakım ekibine bildirildi.";
+        if (hata) Cihaz.Alarm(); else Cihaz.Basari();
+        await JS.InvokeVoidAsync("efekt.cal", hata ? "hata" : neden == "Arıza" ? "alarm" : "basari");
+        aciklama = null;
+        await Yukle();
+    }
+
+    private async Task Bitir(int id)
+    {
+        await Veri.DurusBitirAsync(id);
+        mesaj = "Duruş bitti, makine üretime hazır.";
+        hata = false;
+        await JS.InvokeVoidAsync("efekt.cal", "basari");
+        await Yukle();
+    }
+
+    private static string Sure(UretimProMobil.Models.Durus d)
+    {
+        var s = (d.Bitis ?? DateTime.Now) - d.Baslangic;
+        var metin = s.TotalMinutes < 60 ? $"{(int)s.TotalMinutes} dk" : $"{(int)s.TotalHours} sa {s.Minutes} dk";
+        return d.Bitis == null ? metin + " (sürüyor)" : metin;
+    }
+}

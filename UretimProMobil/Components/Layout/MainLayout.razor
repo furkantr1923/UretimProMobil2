@@ -1,0 +1,71 @@
+@inherits LayoutComponentBase
+@inject OturumServisi Oturum
+@inject IJSRuntime JS
+@implements IDisposable
+
+@if (acilis)
+{
+    <div class="acilis-ekrani @(kapaniyor ? "kapaniyor" : "")">
+        <div class="acilis-logo">⚙</div>
+        <b>ÜretimPro</b>
+        <small>Üretim izlenebilirlik ve kalite · Mobil</small>
+    </div>
+}
+
+@if (!Oturum.GirisYapti)
+{
+    <Giris />
+}
+else
+{
+    <div class="uygulama">
+        <header class="ust">
+            <div class="logo">⚙</div>
+            <div class="baslik">
+                <b>ÜretimPro</b>
+                <small>@Oturum.Kullanici!.AdSoyad · @Rol.Ad(Oturum.Kullanici.Rol)</small>
+            </div>
+            <button class="ust-dugme" @onclick="TemaDegistir" aria-label="Tema">@(karanlik ? "☀️" : "🌙")</button>
+        </header>
+
+        <main class="icerik">@Body</main>
+
+        <nav class="alt-menu">
+            <NavLink href="" Match="NavLinkMatch.All"><span>🏠</span>Ana sayfa</NavLink>
+            <NavLink href="ncr"><span>⚠️</span>NCR</NavLink>
+            <NavLink href="istasyon" class="okut-dugme"><span>▣</span>Okut</NavLink>
+            <NavLink href="durus"><span>⏸️</span>Duruş</NavLink>
+            <NavLink href="daha"><span>☰</span>Daha</NavLink>
+        </nav>
+    </div>
+}
+
+@code {
+    private bool acilis = true, kapaniyor, karanlik;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Oturum.Degisti += Yenile;
+        try { karanlik = Preferences.Default.Get("karanlik", false); } catch { }
+        await Task.Delay(1300);
+        kapaniyor = true;
+        StateHasChanged();
+        await Task.Delay(500);
+        acilis = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool ilk)
+    {
+        if (ilk) { try { await JS.InvokeVoidAsync("efekt.tema", karanlik); } catch { } }
+    }
+
+    private async Task TemaDegistir()
+    {
+        karanlik = !karanlik;
+        Preferences.Default.Set("karanlik", karanlik);
+        await JS.InvokeVoidAsync("efekt.tema", karanlik);
+    }
+
+    private void Yenile() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Oturum.Degisti -= Yenile;
+}

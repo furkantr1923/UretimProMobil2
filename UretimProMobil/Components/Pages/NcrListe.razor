@@ -1,0 +1,26 @@
+@page "/ncr"
+@inject VeriServisi Veri
+
+<div class="sayfa-baslik"><h1>Uygunsuzluklar</h1><p>Tolerans dışı ölçümde NCR otomatik açılır, lot bloke olur.</p></div>
+
+<div class="kart">
+    @if (ncrler.Count == 0)
+    {
+        <div class="bos"><div>✅</div>Uygunsuzluk yok.</div>
+    }
+    <div class="liste">
+        @foreach (var n in ncrler)
+        {
+            <a class="liste-oge" href="ncr/@n.Id">
+                <span class="ikon">@(n.Durum == Durum.Acik ? "⛔" : "📋")</span>
+                <span class="metin"><b class="mono">@n.NcrNo</b><small>@n.Tanim</small><small>@n.Zaman.ToString("dd.MM HH:mm") · @n.Acan @(n.FotoYolu != null ? "· 📸" : "")</small></span>
+                <span class="rozet @(n.Durum == Durum.Acik ? "kirmizi" : n.Durum == Durum.Kapali ? "yesil" : "sari")">@n.Durum</span>
+            </a>
+        }
+    </div>
+</div>
+
+@code {
+    private List<Ncr> ncrler = new();
+    protected override async Task OnInitializedAsync() => ncrler = await Veri.NcrlerAsync();
+}

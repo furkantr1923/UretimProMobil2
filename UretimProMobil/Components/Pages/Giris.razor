@@ -1,0 +1,61 @@
+@inject VeriServisi Veri
+@inject OturumServisi Oturum
+@inject CihazServisi Cihaz
+@inject IJSRuntime JS
+
+<div class="icerik" style="padding-top:calc(env(safe-area-inset-top) + 28px)">
+    <div class="kart karsilama" style="text-align:center;padding:28px 18px">
+        <div class="acilis-logo" style="margin:0 auto 12px;width:80px;height:80px;font-size:42px">⚙</div>
+        <h1 style="font-size:26px">ÜretimPro</h1>
+        <small>Üretim izlenebilirlik ve kalite · Mobil istasyon</small>
+    </div>
+
+    <div class="kart">
+        <div class="form">
+            <label class="alan">Kullanıcı adı <input class="girdi" @bind="kullaniciAdi" autocapitalize="off" /></label>
+            <label class="alan">Şifre <input class="girdi" type="password" @bind="sifre" /></label>
+            @if (hata != null)
+            {
+                <div class="mesaj hata">@hata</div>
+            }
+            <button class="buton bakir tam" @onclick="GirisYap" disabled="@bekliyor">@(bekliyor ? "Giriş yapılıyor..." : "Giriş yap")</button>
+        </div>
+    </div>
+
+    <div class="kart">
+        <div class="kart-baslik"><h2>Demo hesapları</h2><small class="soluk">Şifre: Demo123!</small></div>
+        <div class="cipler">
+            @foreach (var (k, ad) in new[] { ("operator", "👷 Operatör"), ("kalite", "🔬 Kalite"), ("yonetici", "📊 Yönetici"), ("depo", "📦 Depo"), ("burak", "🚫 Burak"), ("admin", "👑 Admin") })
+            {
+                <button class="cip" @onclick="() => Doldur(k)">@ad</button>
+            }
+        </div>
+    </div>
+    <p class="soluk" style="text-align:center;font-size:12px">Portfolyo projesidir · veriler örnektir · internet gerektirmez</p>
+</div>
+
+@code {
+    private string kullaniciAdi = "", sifre = "";
+    private string? hata;
+    private bool bekliyor;
+
+    private void Doldur(string k) { kullaniciAdi = k; sifre = VeriServisi.DemoSifre; Cihaz.Tik(); }
+
+    private async Task GirisYap()
+    {
+        bekliyor = true;
+        hata = null;
+        var k = await Veri.GirisAsync(kullaniciAdi, sifre);
+        bekliyor = false;
+        if (k == null)
+        {
+            hata = "Kullanıcı adı veya şifre hatalı.";
+            Cihaz.Alarm();
+            await JS.InvokeVoidAsync("efekt.cal", "hata");
+            return;
+        }
+        await JS.InvokeVoidAsync("efekt.cal", "basari");
+        Cihaz.Basari();
+        Oturum.Giris(k);
+    }
+}

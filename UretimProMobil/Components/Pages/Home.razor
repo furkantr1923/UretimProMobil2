@@ -1,0 +1,52 @@
+@page "/"
+@inject VeriServisi Veri
+@inject OturumServisi Oturum
+
+@if (ozet == null)
+{
+    <div class="bos"><div>⏳</div>Yükleniyor...</div>
+}
+else
+{
+    var oee = (int)Math.Round(ozet.Oee * 100);
+    <div class="kart karsilama satir" style="gap:16px">
+        <div class="oee-halka" style="--o:@oee"><div>%@oee</div></div>
+        <div>
+            <small>@DateTime.Now.ToString("dd MMMM, dddd") · Vardiya @(DateTime.Now.Hour is >= 8 and < 16 ? "A" : DateTime.Now.Hour >= 16 ? "B" : "C")</small>
+            <h2 style="font-size:20px;margin:4px 0">Merhaba @Oturum.Kullanici!.AdSoyad.Split(' ')[0] 👋</h2>
+            <small>Tahmini OEE (bugün) · hedef %85</small>
+        </div>
+    </div>
+
+    <div class="izgara-2">
+        <div class="kpi"><small>Bugün tesiste</small><b>@ozet.BugunIslem</b><span class="ikon">🏭</span></div>
+        <div class="kpi"><small>Benim işlemim</small><b>@ozet.BenimIslem</b><span class="ikon">👷</span></div>
+        <a class="kpi @(ozet.AcikNcr > 0 ? "kritik" : "")" href="ncr" style="color:inherit"><small>Açık NCR</small><b>@ozet.AcikNcr</b><span class="ikon">⚠️</span></a>
+        <a class="kpi @(ozet.DuranMakine > 0 ? "kritik" : "")" href="durus" style="color:inherit"><small>Arızalı makine</small><b>@ozet.DuranMakine</b><span class="ikon">🔧</span></a>
+    </div>
+
+    <div class="kart">
+        <div class="kart-baslik"><h2>⚡ Hızlı işlemler</h2></div>
+        <div class="izgara-2">
+            <a class="buton bakir" href="istasyon">▣ QR okut</a>
+            <a class="buton" href="durus">⏸️ Duruş bildir</a>
+            <a class="buton" href="sayim">📦 Stok sayımı</a>
+            <a class="buton" href="performans">📈 Performansım</a>
+        </div>
+    </div>
+
+    <a class="kart satir arasi" href="kuyruk" style="color:inherit">
+        <span>📤 <b>Çevrimdışı kuyruk</b><br /><small class="soluk">Merkeze aktarılmayı bekleyen kayıt</small></span>
+        <span class="rozet @(ozet.Bekleyen > 0 ? "sari" : "yesil")">@ozet.Bekleyen</span>
+    </a>
+
+    <div class="kart">
+        <div class="kart-baslik"><h2>🏭 Makineler</h2><small class="soluk">@ozet.CalisanMakine / @ozet.ToplamMakine çalışıyor</small></div>
+        <div class="ilerleme"><i style="width:@(ozet.ToplamMakine == 0 ? 0 : ozet.CalisanMakine * 100 / ozet.ToplamMakine)%"></i></div>
+    </div>
+}
+
+@code {
+    private PanelOzet? ozet;
+    protected override async Task OnInitializedAsync() => ozet = await Veri.PanelAsync(Oturum.Kullanici!);
+}

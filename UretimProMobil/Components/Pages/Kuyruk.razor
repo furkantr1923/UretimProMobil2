@@ -1,0 +1,44 @@
+@page "/kuyruk"
+@inject VeriServisi Veri
+@inject OturumServisi Oturum
+@inject CihazServisi Cihaz
+@inject IJSRuntime JS
+
+<div class="sayfa-baslik"><h1>Çevrimdışı kuyruk</h1><p>İnternet olmadan yapılan her işlem burada saklanır ve merkez sisteme aktarım dosyası (JSON) olarak gönderilir.</p></div>
+
+<div class="kart satir arasi">
+    <span><b style="font-size:28px" class="mono">@kayitlar.Count(k => !k.Aktarildi)</b><br /><small class="soluk">aktarılmayı bekleyen kayıt</small></span>
+    <button class="buton bakir" @onclick="Aktar" disabled="@(!kayitlar.Any(k => !k.Aktarildi))">📤 Dışa aktar</button>
+</div>
+@if (mesaj != null) { <div class="mesaj basari">@mesaj</div> }
+
+<div class="kart">
+    <div class="kart-baslik"><h2>🕒 Kayıtlar</h2></div>
+    @if (kayitlar.Count == 0) { <div class="bos" style="padding:12px">Henüz kayıt yok. İstasyonda bir parça okut.</div> }
+    <div class="liste">
+        @foreach (var k in kayitlar)
+        {
+            <div class="liste-oge">
+                <span class="ikon">@(k.Aktarildi ? "☁️" : "⏳")</span>
+                <span class="metin"><b>@k.Tur</b><small>@k.Ozet</small><small>@k.Zaman.ToString("dd.MM HH:mm:ss")</small></span>
+                <span class="rozet @(k.Aktarildi ? "yesil" : "sari")">@(k.Aktarildi ? "Aktarıldı" : "Bekliyor")</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<KuyrukKaydi> kayitlar = new();
+    private string? mesaj;
+
+    protected override async Task OnInitializedAsync() => kayitlar = await Veri.KuyrukAsync();
+
+    private async Task Aktar()
+    {
+        var (yol, adet) = await Veri.KuyrukDisaAktarAsync(Oturum.Kullanici!);
+        mesaj = $"{adet} kayıt aktarım dosyasına yazıldı.";
+        await JS.InvokeVoidAsync("efekt.cal", "basari");
+        await Cihaz.DosyaPaylas(yol, "ÜretimPro aktarım dosyası");
+        kayitlar = await Veri.KuyrukAsync();
+    }
+}

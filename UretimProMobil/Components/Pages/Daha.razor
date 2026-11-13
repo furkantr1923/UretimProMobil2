@@ -1,0 +1,26 @@
+@page "/daha"
+@inject OturumServisi Oturum
+
+<div class="sayfa-baslik"><h1>Menü</h1></div>
+<div class="kart">
+    <div class="liste">
+        @foreach (var (link, ikon, ad, alt) in ogeler)
+        {
+            <a class="liste-oge" href="@link"><span class="ikon">@ikon</span><span class="metin"><b>@ad</b><small>@alt</small></span><span class="soluk">›</span></a>
+        }
+    </div>
+</div>
+<button class="buton tam" @onclick="Oturum.Cikis">🚪 Çıkış yap</button>
+<p class="soluk" style="text-align:center;font-size:12px">ÜretimPro Mobil v1.0 · Furkan Baykal · Portfolyo projesi, veriler örnektir</p>
+
+@code {
+    private readonly (string, string, string, string)[] ogeler =
+    {
+        ("istasyon", "▣", "İstasyon", "QR okut, ölçüm gir, adımı tamamla"),
+        ("ncr", "⚠️", "Uygunsuzluklar", "NCR, hata fotoğrafı, karar"),
+        ("durus", "⏸️", "Duruş ve arıza", "Makine duruşu başlat / bitir"),
+        ("sayim", "📦", "Stok sayımı", "Lot etiketini okut, farkı gör"),
+        ("performans", "📈", "Performansım", "Günlük işlem, doğruluk, yetkinlik"),
+        ("kuyruk", "📤", "Çevrimdışı kuyruk", "Kayıtları merkeze aktar")
+    };
+}

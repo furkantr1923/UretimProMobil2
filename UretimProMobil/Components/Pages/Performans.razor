@@ -1,0 +1,63 @@
+@page "/performans"
+@inject VeriServisi Veri
+@inject OturumServisi Oturum
+
+<div class="sayfa-baslik"><h1>Performansım</h1><p>Son 7 gün, @Oturum.Kullanici!.AdSoyad</p></div>
+
+@if (yuklendi)
+{
+    var dogruluk = toplam + red == 0 ? 100 : 100.0 * toplam / (toplam + red);
+    <div class="izgara-2">
+        <div class="kpi"><small>Bugün</small><b>@bugun</b><span class="ikon">⚡</span></div>
+        <div class="kpi"><small>7 gün toplam</small><b>@toplam</b><span class="ikon">📦</span></div>
+        <div class="kpi"><small>Günlük ortalama</small><b>@ortalama.ToString("0")</b><span class="ikon">📈</span></div>
+        <div class="kpi @(red > 0 ? "kritik" : "")"><small>İlk seferde doğru</small><b>%@dogruluk.ToString("0.0")</b><span class="ikon">🎯</span></div>
+    </div>
+
+    <div class="kart">
+        <div class="kart-baslik"><h2>📊 Günlük işlem</h2></div>
+        <div class="cubuklar">
+            @{ var enBuyuk = Math.Max(1, hafta.Max(h => h.Deger)); var i = 0; }
+            @foreach (var h in hafta)
+            {
+                <div>
+                    <b>@h.Deger</b>
+                    <i style="height:@(h.Deger * 100 / enBuyuk)%;animation-delay:@(i++ * 70)ms"></i>
+                    <small>@h.Etiket</small>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="kart">
+        <div class="kart-baslik"><h2>🏅 Yetkinliklerim</h2></div>
+        @if (yetkinlikler.Count == 0) { <div class="bos" style="padding:12px">Kayıtlı yetkinlik yok.</div> }
+        <div class="liste">
+            @foreach (var (m, bitis) in yetkinlikler)
+            {
+                var kalan = (bitis - DateTime.Today).Days;
+                <div class="liste-oge">
+                    <span class="ikon">⚙️</span>
+                    <span class="metin"><b class="mono">@m.Kod</b><small>@m.Ad</small></span>
+                    <span class="rozet @(kalan < 0 ? "kirmizi" : kalan < 30 ? "sari" : "yesil")">@(kalan < 0 ? "Süresi doldu" : bitis.ToString("dd.MM.yyyy"))</span>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private bool yuklendi;
+    private List<GunDegeri> hafta = new();
+    private int bugun, toplam, red;
+    private double ortalama;
+    private List<(Makine, DateTime)> yetkinlikler = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var k = Oturum.Kullanici!;
+        (hafta, bugun, toplam, red, ortalama) = await Veri.PerformansAsync(k.Id);
+        yetkinlikler = (await Veri.YetkinliklerAsync(k.Id)).Select(x => (x.Makine, x.Bitis)).ToList();
+        yuklendi = true;
+    }
+}

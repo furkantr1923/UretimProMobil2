@@ -1,0 +1,186 @@
+@page "/istasyon"
+@page "/istasyon/{MakineId:int}"
+@inject VeriServisi Veri
+@inject OturumServisi Oturum
+@inject CihazServisi Cihaz
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@if (MakineId == null)
+{
+    <div class="sayfa-baslik"><h1>İstasyon seç</h1><p>Çalıştığın makineyi seç. Gri olanlar için yetkinlik belgen yok.</p></div>
+    <div class="makine-izgara">
+        @foreach (var m in makineler)
+        {
+            var yetkili = yetkiler.Contains(m.Id);
+            <button class="makine-kart @(yetkili ? "" : "yetkisiz")" @onclick="() => Sec(m.Id)">
+                <span class="isik @Renk(m.Durum)"></span>
+                <b>@m.Kod</b>
+                <small>@m.Ad</small><br />
+                <span class="rozet @Renk(m.Durum)" style="margin-top:8px">@m.Durum</span>
+                @if (!yetkili) { <small style="display:block;margin-top:6px">🔒 Yetkin yok</small> }
+            </button>
+        }
+    </div>
+}
+else if (makine != null)
+{
+    <div class="satir arasi">
+        <div class="sayfa-baslik"><h1>@makine.Kod</h1><p>@makine.Ad · <span class="rozet @Renk(makine.Durum)">@makine.Durum</span></p></div>
+        <a class="buton kucuk" href="istasyon">Değiştir</a>
+    </div>
+
+    <div class="okutma">
+        <div class="tarama"></div>
+        <button class="buton bakir kamera" @onclick="Kamera">📷 Kamerayla QR okut</button>
+        <div class="satir">
+            <input id="seriGirdi" class="girdi buyuk" placeholder="FL120-00681" @bind="seriNo" @bind:event="oninput" @onkeyup="Tus" />
+            <button class="buton bakir" @onclick="() => Okut(seriNo)">➜</button>
+        </div>
+        @if (siradakiler.Count > 0)
+        {
+            <small style="display:block;margin:12px 0 6px;color:#C2D2C7">Sırası gelen parçalar:</small>
+            <div class="cipler">
+                @foreach (var s in siradakiler)
+                {
+                    <button class="cip" style="background:#193326;color:#fff;border-color:#22422F" @onclick="() => Okut(s)">@s</button>
+                }
+            </div>
+        }
+    </div>
+
+    @if (bekliyor)
+    {
+        <div class="bos"><div>⏳</div>Kontrol ediliyor...</div>
+    }
+    else if (sonuc != null)
+    {
+        <div class="sonuc @sonuc.Tur" @key="sayac">
+            <h2>@Ikon(sonuc.Tur) @sonuc.Baslik</h2>
+            <div>@sonuc.Mesaj</div>
+            @if (sonuc.Parca != null)
+            {
+                <small class="soluk mono" style="display:block;margin-top:6px">@sonuc.Parca.SeriNo @(sonuc.AdimAdi != null ? "· " + sonuc.AdimAdi : "")</small>
+            }
+            @if (sonuc.Toplam > 0)
+            {
+                <div class="adimlar">
+                    @for (var i = 1; i <= sonuc.Toplam; i++)
+                    {
+                        <i class="@(i <= (sonuc.Tur is "tamam" or "emir" ? sonuc.Ilerleme : sonuc.Ilerleme - 1) ? "dolu" : "")" style="animation-delay:@(i * 80)ms"></i>
+                    }
+                </div>
+            }
+
+            @if (sonuc.Tur == "olcum" && sonuc.Olculecek != null)
+            {
+                foreach (var k in sonuc.Olculecek)
+                {
+                    <div class="olcum-satir">
+                        <b>@k.Ad (@k.Birim)</b>
+                        <span class="tolerans">Nominal @k.Nominal.ToString("0.###") · tolerans @k.Alt.ToString("0.###") – @k.Ust.ToString("0.###")</span>
+                        <input class="girdi mono @Durumu(k)" inputmode="decimal" placeholder="@k.Nominal.ToString("0.000")" @bind="degerler[k.Id]" @bind:event="oninput" />
+                    </div>
+                }
+                <button class="buton yesil tam" style="margin-top:12px" @onclick="OlcumKaydet">✓ Ölçümleri kaydet</button>
+            }
+
+            @if (sonuc.Tur == "red" && sonuc.NcrId != null)
+            {
+                <div class="izgara-2" style="margin-top:12px">
+                    <button class="buton kirmizi" @onclick="FotoEkle">📸 Hata fotoğrafı</button>
+                    <a class="buton" href="ncr/@sonuc.NcrId">NCR'ı aç</a>
+                </div>
+                @if (fotoMesaji != null) { <div class="mesaj basari" style="margin-top:10px">@fotoMesaji</div> }
+            }
+        </div>
+    }
+    @if (alarm) { <div class="alarm-katman" @key="sayac"></div> }
+}
+
+@code {
+    [Parameter] public int? MakineId { get; set; }
+    private List<Makine> makineler = new();
+    private HashSet<int> yetkiler = new();
+    private Makine? makine;
+    private List<string> siradakiler = new();
+    private string seriNo = "";
+    private OkutmaSonucu? sonuc;
+    private Dictionary<int, string> degerler = new();
+    private bool bekliyor, alarm;
+    private int sayac;
+    private string? fotoMesaji;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        makineler = await Veri.MakinelerAsync();
+        yetkiler = await Veri.YetkiliMakinelerAsync(Oturum.Kullanici!);
+        makine = MakineId == null ? null : makineler.FirstOrDefault(m => m.Id == MakineId);
+        sonuc = null;
+        if (makine != null) siradakiler = await Veri.SiradakiParcalarAsync(makine.Id);
+    }
+
+    private void Sec(int id) { Cihaz.Tik(); Nav.NavigateTo($"istasyon/{id}"); }
+
+    private async Task Kamera()
+    {
+        var deger = await Cihaz.QrOkut();
+        if (!string.IsNullOrWhiteSpace(deger)) await Okut(deger);
+    }
+
+    private async Task Tus(KeyboardEventArgs e) { if (e.Key == "Enter") await Okut(seriNo); }
+
+    private async Task Okut(string? no)
+    {
+        if (makine == null || string.IsNullOrWhiteSpace(no)) return;
+        await JS.InvokeVoidAsync("efekt.cal", "bip");
+        bekliyor = true; alarm = false; fotoMesaji = null;
+        StateHasChanged();
+        sonuc = await Veri.OkutAsync(makine.Id, no, Oturum.Kullanici!);
+        degerler = sonuc.Olculecek?.ToDictionary(k => k.Id, _ => "") ?? new();
+        bekliyor = false;
+        await Sonuclandir();
+    }
+
+    private async Task OlcumKaydet()
+    {
+        if (makine == null || sonuc?.Parca == null) return;
+        sonuc = await Veri.OlcumKaydetAsync(makine.Id, sonuc.Parca.SeriNo, Oturum.Kullanici!, degerler);
+        await Sonuclandir();
+    }
+
+    private async Task Sonuclandir()
+    {
+        sayac++;
+        switch (sonuc?.Tur)
+        {
+            case "tamam": Cihaz.Basari(); await JS.InvokeVoidAsync("efekt.cal", "basari"); break;
+            case "emir": Cihaz.Basari(); await JS.InvokeVoidAsync("efekt.cal", "basari"); await JS.InvokeVoidAsync("efekt.konfeti"); break;
+            case "red": Cihaz.Alarm(); alarm = true; await JS.InvokeVoidAsync("efekt.cal", "alarm"); break;
+            case "hata": Cihaz.Alarm(); await JS.InvokeVoidAsync("efekt.cal", "hata"); break;
+        }
+        if (sonuc?.Tur is "tamam" or "emir")
+        {
+            seriNo = "";
+            if (makine != null) siradakiler = await Veri.SiradakiParcalarAsync(makine.Id);
+            makine = await Veri.MakineAsync(makine!.Id);
+        }
+    }
+
+    private async Task FotoEkle()
+    {
+        if (sonuc?.NcrId is not int id) return;
+        var yol = await Cihaz.FotoCek();
+        var ncr = await Veri.NcrAsync(id);
+        if (yol != null && ncr != null) { await Veri.NcrFotoAsync(ncr, yol); fotoMesaji = "Fotoğraf NCR'a eklendi."; }
+    }
+
+    private string Durumu(Karakteristik k)
+    {
+        if (!degerler.TryGetValue(k.Id, out var m) || !VeriServisi.SayiCoz(m, out var d)) return "";
+        return d >= k.Alt && d <= k.Ust ? "iyi" : "hatali";
+    }
+
+    private static string Renk(string durum) => durum switch { Durum.Calisiyor => "yesil", Durum.Arizali => "kirmizi", _ => "sari" };
+    private static string Ikon(string tur) => tur switch { "tamam" => "✅", "emir" => "🎉", "olcum" => "📏", "red" => "⛔", _ => "⚠️" };
+}
